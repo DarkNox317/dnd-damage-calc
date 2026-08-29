@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>다크앤다커 데미지 계산기</title>
+</head>
+<body>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --ground: #f7f5f0; --surface: #fcfcfb; --edge: #ddd8cc;
+    --ink: #211f1b; --ink-2: #4a453d; --muted: #6b655b;
+    --mage: #5b4bbd; --war: #a8353b; --ok: #008a72; --warn: #a8761c;
+    --mono: "Cascadia Mono", "Consolas", monospace;
+    --sans: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #12110f; --surface: #1a1917; --edge: #322f2a;
+      --ink: #e6e1d6; --ink-2: #b8b1a3; --muted: #8f887b;
+      --mage: #7d72c9; --war: #b83f47; --ok: #0d9683; --warn: #b8842a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #12110f; --surface: #1a1917; --edge: #322f2a;
+    --ink: #e6e1d6; --ink-2: #b8b1a3; --muted: #8f887b;
+    --mage: #7d72c9; --war: #b83f47; --ok: #0d9683; --warn: #b8842a;
+  }
+
+  body { margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.55; padding: 1.5rem 1rem 4rem; }
+  .wrap { max-width: 60rem; margin: 0 auto; }
+  header { margin-bottom: 1rem; }
+  .eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 .3rem; }
+  h1 { font-size: 1.6rem; margin: 0; letter-spacing: -.01em; }
+  .sub { color: var(--ink-2); font-size: .85rem; margin: .4rem 0 0; }
+
+  .tabs { display: flex; gap: .5rem; margin: 1.2rem 0; }
+  .tab { flex: 1; max-width: 12rem; text-align: center; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--edge); border-radius: 4px;
+    padding: .6rem 1rem; font-size: .95rem; font-weight: 600; color: var(--muted);
+    font-family: var(--sans); }
+  .tab:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+  .tab[data-on="1"][data-cls="mage"] { color: var(--mage); border-color: var(--mage); box-shadow: inset 0 -2px 0 var(--mage); }
+  .tab[data-on="1"][data-cls="war"]  { color: var(--war);  border-color: var(--war);  box-shadow: inset 0 -2px 0 var(--war); }
+
+  section.panel { display: none; }
+  section.panel[data-show="1"] { display: block; }
+  section.panel.mage { --accent: var(--mage); }
+  section.panel.war  { --accent: var(--war); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+  .chips span.lbl { font-family: var(--mono); font-size: .7rem; color: var(--muted);
+    align-self: center; margin-right: .2rem; }
+  .chip { background: var(--surface); border: 1px solid var(--edge); border-radius: 999px;
+    padding: .3rem .8rem; cursor: pointer; font-size: .8rem; color: var(--ink-2);
+    font-family: var(--sans); }
+  .chip:hover { border-color: var(--accent); color: var(--ink); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--edge); border-radius: 4px; padding: 1rem; }
+  .card h2 { font-size: .85rem; margin: 0 0 .8rem; letter-spacing: .02em;
+    color: var(--accent); font-family: var(--mono); text-transform: uppercase; }
+  .field { display: grid; grid-template-columns: 1fr 7rem; gap: .8rem; align-items: center; padding: .55rem 0; }
+  .field:not(:last-child) { border-bottom: 1px solid var(--edge); }
+  .field label { font-size: .86rem; color: var(--ink-2); }
+  .field label b { color: var(--ink); font-weight: 600; }
+  .field small { display: block; color: var(--muted); font-size: .72rem; line-height: 1.35; margin-top: .15rem; }
+  .field input, .field select { width: 100%; min-width: 0; text-align: right;
+    background: var(--ground); color: var(--ink); border: 1px solid var(--edge);
+    border-radius: 3px; padding: .38rem .5rem; font-family: var(--mono); font-size: .9rem;
+    font-variant-numeric: tabular-nums; }
+  .field select { text-align: left; font-family: var(--sans); }
+  .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .final { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+  .final .num { font-family: var(--mono); font-size: 2.6rem; font-weight: 700;
+    color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1; }
+  .final .raw { font-family: var(--mono); font-size: .85rem; color: var(--muted); }
+  .tickline { font-family: var(--mono); font-size: 1rem; color: var(--ink); margin-top: .5rem; }
+  .tickline b { color: var(--ok); font-size: 1.3rem; }
+
+  table.locs { width: 100%; border-collapse: collapse;
+    font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .locs td { padding: .42rem .4rem; border-bottom: 1px solid var(--edge); font-size: .85rem; }
+  .locs td:first-child { font-family: var(--sans); color: var(--ink-2); }
+  .locs td:nth-child(2) { text-align: right; color: var(--muted); font-size: .75rem; white-space: nowrap; }
+  .locs td:last-child { text-align: right; font-weight: 700; font-size: 1.25rem; color: var(--ink); white-space: nowrap; }
+  .locs td:last-child small { font-weight: 400; font-size: .7rem; color: var(--muted); margin-left: .35rem; }
+  .locs tr.head td:first-child { color: var(--accent); font-weight: 600; }
+  .locs tr.head td:last-child { color: var(--accent); font-size: 1.55rem; }
+
+  table.steps { width: 100%; border-collapse: collapse; margin-top: .9rem;
+    font-family: var(--mono); font-size: .78rem; font-variant-numeric: tabular-nums; }
+  .steps td { padding: .28rem .4rem; border-bottom: 1px solid var(--edge); }
+  .steps td:first-child { color: var(--ink-2); font-family: var(--sans); font-size: .8rem; }
+  .steps td:nth-child(2) { text-align: right; color: var(--muted); white-space: nowrap; }
+  .steps td:last-child { text-align: right; font-weight: 600; white-space: nowrap; }
+  .warnbox { margin-top: .7rem; font-size: .78rem; color: var(--warn); }
+  .note { margin-top: 1.2rem; font-size: .76rem; color: var(--muted); line-height: 1.6; }
+  .note code { font-family: var(--mono); font-size: .95em; }
+
+  #theme-toggle { position: fixed; top: 1rem; right: 1rem; z-index: 5;
+    background: var(--surface); color: var(--ink-2); border: 1px solid var(--edge);
+    border-radius: 3px; padding: .4rem .7rem; cursor: pointer;
+    font-family: var(--mono); font-size: .7rem; }
+  #theme-toggle:hover { border-color: var(--ink-2); color: var(--ink); }
+  header { padding-right: 6.5rem; }
+</style>
+
+<button id="theme-toggle" type="button">테마 전환</button>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Dark and Darker · Damage Calculator</p>
+  <h1>데미지 계산기</h1>
+  <p class="sub">훈련 더미 실측으로 검증한 공식 그대로. 위쪽에서 클래스를 고르면 돼.</p>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" data-cls="mage" data-on="1" id="tab-mage" type="button">법사 (마법)</button>
+  <button class="tab" data-cls="war" data-on="0" id="tab-war" type="button">전사 (물리)</button>
+</div>
+
+<!-- ══════════════ 법사 ══════════════ -->
+<section class="panel mage" id="panel-mage" data-show="1">
+
+<div class="chips" id="m_chips">
+  <span class="lbl">프리셋</span>
+  <button class="chip" data-p='{"base":30,"coeff":1,"dot":0,"loc":"body"}'>화염구 직격 30</button>
+  <button class="chip" data-p='{"base":10,"coeff":1,"dot":0,"loc":"aoe"}'>스플래시 10 (AoE)</button>
+  <button class="chip" data-p='{"base":20,"coeff":1,"dot":0,"loc":"aoe"}'>폭발 20 (AoE)</button>
+  <button class="chip" data-p='{"base":15,"coeff":1,"dot":0,"elem":0,"loc":"body"}'>잽 15 (빛)</button>
+  <button class="chip" data-p='{"base":3,"coeff":0.5,"dot":4,"loc":"aoe"}'>화상 3 (통달 4초)</button>
+  <button class="chip" data-p='{"base":1,"coeff":0.5,"dot":1,"elem":0,"loc":"aoe"}'>잽 화상 1 (1초)</button>
+  <button class="chip" data-p='{"dr":10,"hsred":0}'>훈련 더미 (마법 +10%)</button>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>공격 측</h2>
+    <div class="field"><label><b>스펠 기본 피해</b><small>툴팁 기본값 (예: 화염구 30)</small></label><input id="m_base" type="number" step="any" value="30"></div>
+    <div class="field"><label><b>마법서·지팡이 마법 피해</b><small>장비의 '마법 피해' — 기본에 합산되어 주문력을 같이 받음</small></label><input id="m_gear" type="number" step="any" value="7"></div>
+    <div class="field"><label><b>주문력 보너스 %</b><small>스탯창 값 (마법 피해 보너스 퍽 포함)</small></label><input id="m_power" type="number" step="any" value="59.1"></div>
+    <div class="field"><label><b>속성 피해 보너스 %</b><small>화염 통달 5% 등 — 별도 곱</small></label><input id="m_elem" type="number" step="any" value="5"></div>
+    <div class="field"><label><b>추가 마법 피해</b><small>곱셈이 끝난 뒤 가산</small></label><input id="m_add" type="number" step="any" value="7"></div>
+    <div class="field"><label><b>마법 관통력 %</b></label><input id="m_pen" type="number" step="any" value="5"></div>
+    <div class="field"><label><b>헤드샷 피해 보너스 %</b><small>스탯창 값. 기본 150, 캡 180</small></label><input id="m_hs" type="number" step="any" value="150"></div>
+    <div class="field"><label><b>계수</b><small>툴팁 괄호값. 직격 1.0 / 화상 0.5</small></label><input id="m_coeff" type="number" step="any" value="1"></div>
+  </div>
+  <div class="card">
+    <h2>대상 측</h2>
+    <div class="field"><label><b>적중 부위</b><small>범위(AoE)·도트는 부위 배수가 안 붙음</small></label>
+      <select id="m_loc">
+        <option value="body">몸통 (×1.0)</option><option value="head">머리 (헤드샷)</option>
+        <option value="arm">팔 (×0.8)</option><option value="hand">손 (×0.7)</option>
+        <option value="leg">다리 (×0.6)</option><option value="foot">발 (×0.5)</option>
+        <option value="aoe">범위·도트 (×1.0 고정)</option>
+      </select></div>
+    <div class="field"><label><b>마법 피해 감소 %</b><small>하드캡 65</small></label><input id="m_dr" type="number" step="any" value="10"></div>
+    <div class="field"><label><b>헤드샷 피해 감소 %</b><small>머리 적중일 때만 차감</small></label><input id="m_hsred" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>투사체 피해 감소 %</b><small>투사체형 스펠일 때만</small></label><input id="m_projred" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>도트 지속시간 (초)</b><small>화상이면 입력 → 틱당 표시. 직격은 0</small></label><input id="m_dot" type="number" step="any" value="0"></div>
+    <div class="result">
+      <h2 style="margin-top:1.2rem">결과</h2>
+      <div class="final"><span class="num" id="m_out">—</span><span class="raw" id="m_outraw"></span></div>
+      <div class="tickline" id="m_tickout" hidden></div>
+      <div class="warnbox" id="m_warn" hidden></div>
+      <table class="steps"><tbody id="m_steps"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  공식: <code>[ (기본 + 장비×계수) × (1 + 주문력%×계수) × (1 + 속성%) + 추가×계수 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%)</code><br>
+  · 검증: 훈련 더미(마법 감소 +10%) 실측 14건 재현 — 직격 62/32/47/38/40/48/53/24/30/39 + 화상 3/3/8/2<br>
+  · 화상은 총량제: 총량을 지속 초로 나눠 1초마다 지급 (화염 통달 +2초는 같은 총량을 더 잘게 나눔)
+</p>
+
+</section>
+
+<!-- ══════════════ 전사 ══════════════ -->
+<section class="panel war" id="panel-war" data-show="0">
+
+<div class="chips" id="w_chips">
+  <span class="lbl">프리셋</span>
+  <button class="chip" data-p='{"dr":-27,"hsred":0}'>훈련 더미 (물리 −27%)</button>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>공격 측</h2>
+    <div class="field"><label><b>무기 기본 피해</b><small>무기 툴팁의 공격력</small></label><input id="w_base" type="number" step="any" value="48"></div>
+    <div class="field"><label><b>콤보·타격점 배수</b><small>연격 후속타/무기 '단 부위' 배수. 정타·첫타는 1.0</small></label><input id="w_combo" type="number" step="any" value="1"></div>
+    <div class="field"><label><b>추가 무기 공격력</b><small>장비의 '무기 공격력 추가' — 콤보 배수는 안 받음</small></label><input id="w_gear" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>물리력 보너스 %</b><small>스탯창 값</small></label><input id="w_power" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>추가 물리 피해</b><small>곱셈이 끝난 뒤 가산</small></label><input id="w_add" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>방어구 관통력 %</b></label><input id="w_pen" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>헤드샷 피해 보너스 %</b><small>스탯창 값. 기본 150, 캡 180</small></label><input id="w_hs" type="number" step="any" value="150"></div>
+  </div>
+  <div class="card">
+    <h2>대상 측</h2>
+    <div class="field"><label><b>물리 피해 감소 %</b><small>하드캡 65 (음수 = 피해를 더 받음)</small></label><input id="w_dr" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>헤드샷 피해 감소 %</b><small>머리 행에서 차감</small></label><input id="w_hsred" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>투사체 피해 감소 %</b><small>활·석궁·투척일 때만</small></label><input id="w_projred" type="number" step="any" value="0"></div>
+    <div class="field"><label><b>투사체 감쇠 배수</b><small>원거리 낙차. 근접·근거리 1.0</small></label><input id="w_falloff" type="number" step="any" value="1"></div>
+    <div class="result">
+      <h2 style="margin-top:1.2rem">부위별 데미지</h2>
+      <table class="locs"><tbody id="w_locs"></tbody></table>
+      <div class="warnbox" id="w_warn" hidden></div>
+      <table class="steps"><tbody id="w_steps"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  공식: <code>[ (무기 기본 × 콤보 + 추가 무기 공격력) × (1 + 물리력%) + 추가 물리 피해 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%) × 감쇠</code><br>
+  · 부위 배수: 머리 = <code>헤드샷보너스% − 헤드샷감소%</code> (캡 180) / 몸통 1.0 / 팔 0.8 / 손 0.7 / 다리 0.6 / 발 0.5<br>
+  · 검증: 훈련 더미 실측 4부위(몸통 85 / 머리 133 / 팔 68 / 발 42) 재현. 훈련 더미는 물리 감소 약 −27% (더 받음). 콤보·감쇠 항은 위키 기반
+</p>
+
+</section>
+
+</div>
+
+<script>
+/* ── 순수 계산부 (검증 테스트가 이 블록만 따로 실행함) ─────────────── */
+var LOCATION_MULT = { body: 1.0, arm: 0.8, hand: 0.7, leg: 0.6, foot: 0.5, aoe: 1.0 };
+var HEADSHOT_CAP = 180;
+
+function locationMultiplier (loc, hsBonusPct, hsRedPct) {
+  if (loc === "head") {
+    var capped = Math.min(hsBonusPct, HEADSHOT_CAP);
+    return Math.max(0, (capped - hsRedPct) / 100);
+  }
+  return LOCATION_MULT[loc] !== undefined ? LOCATION_MULT[loc] : 1.0;
+}
+
+function calcMagic (i) {
+  const S = i.coeff;
+  const scaledBase = i.base + i.gear * S;
+  const powered = scaledBase * (1 + i.power / 100 * S);
+  const withElem = powered * (1 + i.elem / 100);
+  const attack = withElem + i.add * S;
+  const locMult = locationMultiplier(i.loc, i.hs, i.hsred);
+  const withLoc = attack * locMult;
+  const defense = 1 - (i.dr / 100) * (1 - i.pen / 100);
+  const afterDef = withLoc * defense;
+  const finalDmg = afterDef * (1 - i.projred / 100);
+  return { scaledBase, powered, withElem, attack, locMult, withLoc, defense, afterDef, finalDmg };
+}
+
+function calcPhysical (i) {
+  const comboBase = i.base * i.combo;
+  const withGear = comboBase + i.gear;
+  const powered = withGear * (1 + i.power / 100);
+  const attack = powered + i.add;
+  const locMult = locationMultiplier(i.loc, i.hs, i.hsred);
+  const withLoc = attack * locMult;
+  const defense = 1 - (i.dr / 100) * (1 - i.pen / 100);
+  const afterDef = withLoc * defense;
+  const afterProj = afterDef * (1 - i.projred / 100);
+  const finalDmg = afterProj * i.falloff;
+  return { comboBase, withGear, powered, attack, locMult, withLoc, defense, afterDef, afterProj, finalDmg };
+}
+
+var LOCATION_ORDER = [
+  ["head", "머리"], ["body", "몸통"], ["arm", "팔"],
+  ["hand", "손"], ["leg", "다리"], ["foot", "발"]
+];
+
+function calcPhysicalAll (i) {
+  return LOCATION_ORDER.map(function (pair) {
+    const r = calcPhysical(Object.assign({}, i, { loc: pair[0] }));
+    return { loc: pair[0], name: pair[1], mult: r.locMult, dmg: r.finalDmg, detail: r };
+  });
+}
+if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, calcPhysicalAll, locationMultiplier };
+</script>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const num = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
+  const f1 = (v) => (Math.round(v * 100) / 100).toString();
+
+  /* ── 탭 ── */
+  function showTab (cls) {
+    $("panel-mage").dataset.show = cls === "mage" ? "1" : "0";
+    $("panel-war").dataset.show = cls === "war" ? "1" : "0";
+    $("tab-mage").dataset.on = cls === "mage" ? "1" : "0";
+    $("tab-war").dataset.on = cls === "war" ? "1" : "0";
+    try { localStorage.setItem("ddc-tab", cls); } catch (e) {}
+  }
+  $("tab-mage").addEventListener("click", () => showTab("mage"));
+  $("tab-war").addEventListener("click", () => showTab("war"));
+  try { const t = localStorage.getItem("ddc-tab"); if (t === "war") showTab("war"); } catch (e) {}
+
+  /* ── 법사 ── */
+  const mNums = ["base","gear","power","elem","add","pen","hs","coeff","dr","hsred","projred","dot"];
+  function renderMage () {
+    const i = Object.fromEntries(mNums.map(k => [k, num("m_" + k)]));
+    i.loc = $("m_loc").value;
+    if (i.coeff === 0) i.coeff = 1;
+    const r = calcMagic(i);
+
+    $("m_out").textContent = Math.round(r.finalDmg);
+    $("m_outraw").textContent = "(계산값 " + f1(r.finalDmg) + ")";
+
+    const tick = $("m_tickout");
+    if (i.dot > 0) {
+      const per = r.finalDmg / i.dot;
+      tick.hidden = false;
+      tick.innerHTML = "도트: 총량 " + f1(r.finalDmg) + " ÷ " + i.dot + "초 = 틱당 <b>" +
+        Math.round(per) + "</b> <span style='color:var(--muted)'>(" + f1(per) + ")</span>";
+    } else tick.hidden = true;
+
+    const warns = [];
+    if (i.dr > 65) warns.push("피해 감소 하드캡은 65% — 초과분은 무시돼.");
+    if (i.loc === "head" && i.hs > 180) warns.push("헤드샷 총합 캡 180% 적용됨.");
+    $("m_warn").hidden = !warns.length;
+    $("m_warn").textContent = warns.join(" ");
+
+    const rows = [
+      ["기본 + 장비×" + i.coeff, i.base + " + " + f1(i.gear * i.coeff), f1(r.scaledBase)],
+      ["× (1 + 주문력 " + i.power + "%×" + i.coeff + ")", "× " + f1(1 + i.power / 100 * i.coeff), f1(r.powered)],
+      i.elem ? ["× (1 + 속성 " + i.elem + "%)", "× " + f1(1 + i.elem / 100), f1(r.withElem)] : null,
+      ["+ 추가피해×" + i.coeff, "+ " + f1(i.add * i.coeff), f1(r.attack)],
+      r.locMult !== 1 ? ["× 부위 배수", "× " + f1(r.locMult), f1(r.withLoc)] : null,
+      ["× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]", "× " + f1(r.defense), f1(r.afterDef)],
+      i.projred ? ["× (1 − 투사체 " + i.projred + "%)", "× " + f1(1 - i.projred / 100), f1(r.finalDmg)] : null,
+    ].filter(Boolean);
+    $("m_steps").innerHTML = rows.map(([a, b, c]) =>
+      "<tr><td>" + a + "</td><td>" + b + "</td><td>" + c + "</td></tr>").join("");
+  }
+  mNums.forEach(id => $("m_" + id).addEventListener("input", renderMage));
+  $("m_loc").addEventListener("change", renderMage);
+  $("m_chips").addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".chip");
+    if (!btn) return;
+    const p = JSON.parse(btn.dataset.p);
+    for (const k in p) {
+      if (k === "loc") $("m_loc").value = p[k];
+      else if ($("m_" + k)) $("m_" + k).value = p[k];
+    }
+    renderMage();
+  });
+
+  /* ── 전사 ── */
+  const wNums = ["base","combo","gear","power","add","pen","hs","dr","hsred","projred","falloff"];
+  function renderWar () {
+    const i = Object.fromEntries(wNums.map(k => [k, num("w_" + k)]));
+    if (i.combo === 0) i.combo = 1;
+    if (i.falloff === 0) i.falloff = 1;
+
+    const all = calcPhysicalAll(i);
+    $("w_locs").innerHTML = all.map(row =>
+      "<tr class='" + (row.loc === "head" ? "head" : row.loc) + "'>" +
+      "<td>" + row.name + "</td><td>× " + f1(row.mult) + "</td>" +
+      "<td>" + Math.round(row.dmg) + "<small>(" + f1(row.dmg) + ")</small></td></tr>"
+    ).join("");
+
+    const warns = [];
+    if (i.dr > 65) warns.push("피해 감소 하드캡은 65% — 초과분은 무시돼.");
+    if (i.hs > 180) warns.push("헤드샷 총합 캡 180% 적용됨.");
+    $("w_warn").hidden = !warns.length;
+    $("w_warn").textContent = warns.join(" ");
+
+    const r = calcPhysical(Object.assign({}, i, { loc: "body" }));
+    const rows = [
+      i.combo !== 1 ? ["무기 기본 × 콤보", i.base + " × " + i.combo, f1(r.comboBase)] : null,
+      ["+ 추가 무기 공격력", (i.combo !== 1 ? "" : i.base + " ") + "+ " + i.gear, f1(r.withGear)],
+      ["× (1 + 물리력 " + i.power + "%)", "× " + f1(1 + i.power / 100), f1(r.powered)],
+      ["+ 추가 물리 피해", "+ " + i.add, f1(r.attack)],
+      ["× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]", "× " + f1(r.defense), f1(r.afterDef)],
+      i.projred ? ["× (1 − 투사체 " + i.projred + "%)", "× " + f1(1 - i.projred / 100), f1(r.afterProj)] : null,
+      i.falloff !== 1 ? ["× 감쇠", "× " + f1(i.falloff), f1(r.finalDmg)] : null,
+      ["→ 위 값에 부위 배수를 곱한 것이 부위별 데미지", "", ""],
+    ].filter(Boolean);
+    $("w_steps").innerHTML = rows.map(([a, b, c]) =>
+      "<tr><td>" + a + "</td><td>" + b + "</td><td>" + c + "</td></tr>").join("");
+  }
+  wNums.forEach(id => $("w_" + id).addEventListener("input", renderWar));
+  $("w_chips").addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".chip");
+    if (!btn) return;
+    const p = JSON.parse(btn.dataset.p);
+    for (const k in p) if ($("w_" + k)) $("w_" + k).value = p[k];
+    renderWar();
+  });
+
+  renderMage();
+  renderWar();
+})();
+</script>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var s = localStorage.getItem('ddc-theme'); if (s) root.setAttribute('data-theme', s); } catch (e) {}
+  document.getElementById('theme-toggle').addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('ddc-theme', next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
