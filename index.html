@@ -218,7 +218,7 @@
 </div>
 
 <p class="note">
-  공식: <code>[ (무기 기본 × 콤보 + 추가 무기 공격력) × (1 + 물리력%) + 추가 물리 피해 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%) × 감쇠</code><br>
+  공식: <code>[ (무기 기본 × 콤보 + 추가 무기 공격력) × (1 + 물리력%) + 추가 물리 피해 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%) × 감쇠</code> (감소%가 음수면 관통 미적용)<br>
   · 부위 배수: 머리 = <code>헤드샷보너스% − 헤드샷감소%</code> (캡 180) / 몸통 1.0 / 팔 0.8 / 손 0.7 / 다리 0.6 / 발 0.5
 </p>
 
@@ -247,7 +247,7 @@ function calcMagic (i) {
   const attack = withElem + i.add * S;
   const locMult = locationMultiplier(i.loc, i.hs, i.hsred);
   const withLoc = attack * locMult;
-  const defense = 1 - (i.dr / 100) * (1 - i.pen / 100);
+  const defense = 1 - (i.dr / 100) * (i.dr > 0 ? 1 - i.pen / 100 : 1);   // 관통은 양수 감소만 깎음 (음수=취약은 그대로)
   const afterDef = withLoc * defense;
   const finalDmg = afterDef * (1 - i.projred / 100);
   return { scaledBase, powered, withElem, attack, locMult, withLoc, defense, afterDef, finalDmg };
@@ -260,7 +260,7 @@ function calcPhysical (i) {
   const attack = powered + i.add;
   const locMult = locationMultiplier(i.loc, i.hs, i.hsred);
   const withLoc = attack * locMult;
-  const defense = 1 - (i.dr / 100) * (1 - i.pen / 100);
+  const defense = 1 - (i.dr / 100) * (i.dr > 0 ? 1 - i.pen / 100 : 1);   // 관통은 양수 감소만 깎음 (음수=취약은 그대로)
   const afterDef = withLoc * defense;
   const afterProj = afterDef * (1 - i.projred / 100);
   const finalDmg = afterProj * i.falloff;
@@ -330,7 +330,7 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       i.elem ? ["× (1 + 속성 " + i.elem + "%)", "× " + f1(1 + i.elem / 100), f1(r.withElem)] : null,
       ["+ 추가피해×" + i.coeff, "+ " + f1(i.add * i.coeff), f1(r.attack)],
       r.locMult !== 1 ? ["× 부위 배수", "× " + f1(r.locMult), f1(r.withLoc)] : null,
-      ["× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]", "× " + f1(r.defense), f1(r.afterDef)],
+      [i.dr > 0 ? "× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]" : "× 방어 [1 − (" + i.dr + "%)] (음수 감소엔 관통 미적용)", "× " + f1(r.defense), f1(r.afterDef)],
       i.projred ? ["× (1 − 투사체 " + i.projred + "%)", "× " + f1(1 - i.projred / 100), f1(r.finalDmg)] : null,
     ].filter(Boolean);
     $("m_steps").innerHTML = rows.map(([a, b, c]) =>
@@ -375,7 +375,7 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       ["+ 추가 무기 공격력", (i.combo !== 1 ? "" : i.base + " ") + "+ " + i.gear, f1(r.withGear)],
       ["× (1 + 물리력 " + i.power + "%)", "× " + f1(1 + i.power / 100), f1(r.powered)],
       ["+ 추가 물리 피해", "+ " + i.add, f1(r.attack)],
-      ["× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]", "× " + f1(r.defense), f1(r.afterDef)],
+      [i.dr > 0 ? "× 방어 [1 − " + i.dr + "%×(1−" + i.pen + "%)]" : "× 방어 [1 − (" + i.dr + "%)] (음수 감소엔 관통 미적용)", "× " + f1(r.defense), f1(r.afterDef)],
       i.projred ? ["× (1 − 투사체 " + i.projred + "%)", "× " + f1(1 - i.projred / 100), f1(r.afterProj)] : null,
       i.falloff !== 1 ? ["× 감쇠", "× " + f1(i.falloff), f1(r.finalDmg)] : null,
       ["→ 위 값에 부위 배수를 곱한 것이 부위별 데미지", "", ""],
