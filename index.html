@@ -453,19 +453,15 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmtDelta = (d, base) => {
     if (Math.abs(d) < 0.005) return "<span class='same'>±0</span>";
-    const pct = base ? " (" + (d > 0 ? "+" : "") + (Math.round(d / base * 1000) / 10) + "%)" : "";
+    const pct = base ? " (" + (d > 0 ? "+" : "") + (Math.round(d / Math.abs(base) * 1000) / 10) + "%)" : "";
     return "<span class='" + (d > 0 ? "up" : "down") + "'>" + (d > 0 ? "+" : "") + f1(d) + pct + "</span>";
   };
 
   function makeSaves (cfg) {
     const P = cfg.prefix, KEY = "ddc-saves-" + cfg.cls, box = $(P + "saves");
-    let saves = [], canStore = true, baseCol = 0, diffOnly = true, noteTimer = null;
+    let saves = [], canStore = true, baseKey = null, diffOnly = true, noteTimer = null;
     const checked = new Set();
-    try {
-      const a = JSON.parse(localStorage.getItem(KEY) || "[]");
-      if (Array.isArray(a)) saves = a;
-    } catch (e) { canStore = false; }
-    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saves)); } catch (e) { canStore = false; } };
+    const CUR = "__cur";
 
     const isSel = (k) => !!(cfg.fields.find(f => f[0] === k) || [])[2];
     const dflt = (k) => {
@@ -490,6 +486,33 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       return o ? o.textContent : String(val);
     };
     const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const sig = (name, v) => name + "\u0000" + JSON.stringify(full(v));   // 중복 판정용
+
+    // 저장소 읽기 — 깨진 항목은 버리고 값은 검증.
+    // 탭을 여러 개 열어둬도 서로 덮어쓰지 않도록, 바꾸기 직전마다 다시 읽는다 (mutate).
+    function readStore () {
+      let raw;
+      try { raw = localStorage.getItem(KEY); } catch (e) { canStore = false; return saves; }
+      if (!raw) return [];
+      let a = null;
+      try { a = JSON.parse(raw); } catch (e) {}
+      if (!Array.isArray(a)) {
+        try { localStorage.setItem(KEY + "-broken", raw); } catch (e) {}   // 원본은 따로 남겨둠
+        return [];
+      }
+      return a.filter(s => s && typeof s === "object" && typeof s.id === "string" &&
+                           typeof s.name === "string" && s.vals && typeof s.vals === "object")
+              .map(s => ({ id: s.id, name: s.name.slice(0, 40), vals: clean(s.vals), t: +s.t || 0 }));
+    }
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saves)); } catch (e) { canStore = false; } };
+    const prune = () => { for (const id of [...checked]) if (!saves.some(s => s.id === id)) checked.delete(id); };
+    function mutate (fn) {
+      saves = readStore();
+      const msg = fn();
+      persist(); prune(); drawList(); drawCompare();
+      if (msg) note(msg);
+    }
+    saves = readStore();
 
     box.innerHTML =
       "<h2>저장 · 비교</h2>" +
@@ -532,18 +555,20 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
 
     function drawCompare () {
       const C = $(P + "scmp");
-      const cols = saves.filter(s => checked.has(s.id)).map(s => ({ name: s.name, v: full(s.vals) }));
+      const cols = saves.filter(s => checked.has(s.id)).map(s => ({ key: s.id, name: s.name, v: full(s.vals) }));
       if (!cols.length) {
         C.innerHTML = saves.length
           ? "<p class='hint'>체크한 세팅이 <b>현재 입력</b>과 나란히 비교돼. 열 제목을 누르면 그 열이 차이(±)의 기준이 돼.</p>"
           : "";
         return;
       }
-      cols.push({ name: "현재 입력", v: current(), cur: true });
-      if (baseCol >= cols.length) baseCol = 0;
+      cols.push({ key: CUR, name: "현재 입력", v: current(), cur: true });
+      // 기준은 열 번호가 아니라 '어느 세팅인지'로 기억 — 다른 체크를 풀어도 기준이 옮겨가지 않게
+      let baseCol = cols.findIndex(c => c.key === baseKey);
+      if (baseCol < 0) baseCol = 0;
 
       let h = "<table class='cmp'><thead><tr><th></th>" + cols.map((c, j) =>
-        "<th data-col='" + j + "' class='" + (j === baseCol ? "base" : "") + (c.cur ? " cur" : "") +
+        "<th data-key='" + esc(c.key) + "' class='" + (j === baseCol ? "base" : "") + (c.cur ? " cur" : "") +
         "' title='" + esc(c.name) + " — 눌러서 기준으로'>" + (j === baseCol ? "◆ " : "") + esc(c.name) + "</th>").join("") +
         "</tr></thead><tbody>";
 
@@ -573,19 +598,23 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
 
     function saveNow () {
       const nameEl = $(P + "sname");
-      const name = nameEl.value.trim() || ("세팅 " + (saves.length + 1));
-      saves.push({ id: newId(), name, vals: current(), t: Date.now() });
+      const typed = nameEl.value.trim();
       nameEl.value = "";
-      persist(); drawList(); drawCompare(); note("'" + name + "' 저장했어.");
+      mutate(() => {
+        const name = typed || ("세팅 " + (saves.length + 1));
+        saves.push({ id: newId(), name, vals: current(), t: Date.now() });
+        return "'" + name + "' 저장했어.";
+      });
     }
 
     box.addEventListener("click", (ev) => {
-      const th = ev.target.closest("th[data-col]");
-      if (th) { baseCol = +th.dataset.col; drawCompare(); return; }
+      const th = ev.target.closest("th[data-key]");
+      if (th) { baseKey = th.dataset.key; drawCompare(); return; }
       const b = ev.target.closest("button[data-act]");
       if (!b) return;
       const act = b.dataset.act, row = b.closest(".sv");
-      const s = row ? saves.find(x => x.id === row.dataset.id) : null;
+      const id = row ? row.dataset.id : null;
+      const s = id ? saves.find(x => x.id === id) : null;
       if (act === "save") saveNow();
       else if (act === "load" && s) {
         const v = full(s.vals);
@@ -593,12 +622,15 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
         cfg.render(); drawCompare(); note("'" + s.name + "' 불러왔어.");
       } else if (act === "over" && s) {
         if (!confirm("'" + s.name + "'을(를) 지금 입력된 값으로 덮어쓸까?")) return;
-        s.vals = current(); s.t = Date.now();
-        persist(); drawList(); drawCompare(); note("'" + s.name + "' 갱신했어.");
+        mutate(() => {
+          const t = saves.find(x => x.id === id);
+          if (!t) return "그 세팅은 다른 창에서 이미 지워졌어.";
+          t.vals = current(); t.t = Date.now();
+          return "'" + t.name + "' 갱신했어.";
+        });
       } else if (act === "del" && s) {
         if (!confirm("'" + s.name + "' 삭제할까?")) return;
-        saves = saves.filter(x => x !== s); checked.delete(s.id);
-        persist(); drawList(); drawCompare(); note("삭제했어.");
+        mutate(() => { saves = saves.filter(x => x.id !== id); return "삭제했어."; });
       } else if (act === "export") {
         if (!saves.length) { note("내보낼 세팅이 없어."); return; }
         const data = JSON.stringify({ app: "ddc", cls: cfg.cls, saves });
@@ -613,14 +645,26 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
         try { o = JSON.parse(txt); } catch (e) { o = null; }
         if (!o || o.app !== "ddc" || !Array.isArray(o.saves)) { alert("형식이 맞지 않아. 내보내기로 복사한 내용을 그대로 붙여넣어줘."); return; }
         if (o.cls !== cfg.cls) { alert((o.cls === "war" ? "전사" : "법사") + " 탭 데이터야. 그 탭에서 가져와줘."); return; }
-        let n = 0;
-        for (const s of o.saves) {
-          if (!s || typeof s.name !== "string" || !s.vals) continue;
-          saves.push({ id: newId(), name: s.name.slice(0, 40) || ("세팅 " + (saves.length + 1)), vals: clean(s.vals), t: +s.t || Date.now() });
-          n++;
-        }
-        persist(); drawList(); drawCompare(); note(n + "개 가져왔어.");
+        mutate(() => {
+          const have = new Set(saves.map(x => sig(x.name, x.vals)));
+          let n = 0, dup = 0;
+          for (const s of o.saves) {
+            if (!s || typeof s.name !== "string" || !s.vals || typeof s.vals !== "object") continue;
+            const name = s.name.slice(0, 40) || ("세팅 " + (saves.length + 1));
+            const vals = clean(s.vals);
+            if (have.has(sig(name, vals))) { dup++; continue; }   // 같은 이름·같은 값은 건너뜀
+            have.add(sig(name, vals));
+            saves.push({ id: newId(), name, vals, t: +s.t || Date.now() });
+            n++;
+          }
+          return n + "개 가져왔어." + (dup ? " (이미 있는 " + dup + "개는 건너뜀)" : "");
+        });
       }
+    });
+    // 다른 창(탭)에서 저장·삭제하면 이 창 목록도 따라감
+    window.addEventListener("storage", (ev) => {
+      if (ev.key !== KEY) return;
+      saves = readStore(); prune(); drawList(); drawCompare();
     });
     box.addEventListener("change", (ev) => {
       const t = ev.target;
@@ -631,7 +675,7 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       } else if (t.id === P + "sdiff") { diffOnly = t.checked; drawCompare(); }
     });
     $(P + "sname").addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); saveNow(); }
+      if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); saveNow(); }
     });
     // 입력을 바꾸면 비교표의 '현재 입력' 열이 따라 갱신됨
     const panel = $("panel-" + cfg.cls);
@@ -643,10 +687,21 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
     drawList(); drawCompare(); note();
   }
 
+  // 계산기 본체를 먼저 그려둔다 — 저장 기능에 무슨 일이 생겨도 계산은 항상 동작하게
+  renderMage();
+  renderWar();
+
   const mageIn = (v) => Object.assign({}, v, { coeff: v.coeff === 0 ? 1 : v.coeff });
   const warIn = (v) => Object.assign({}, v, { combo: v.combo === 0 ? 1 : v.combo, falloff: v.falloff === 0 ? 1 : v.falloff });
+  const safeSaves = (cfg) => {
+    try { makeSaves(cfg); }
+    catch (e) {
+      console.error("저장 기능 초기화 실패:", e);
+      $(cfg.prefix + "saves").innerHTML = "<h2>저장 · 비교</h2><p class='savenote'>저장 기능을 불러오지 못했어. 계산기는 정상 동작해.</p>";
+    }
+  };
 
-  makeSaves({
+  safeSaves({
     cls: "mage", prefix: "m_", render: renderMage, example: "화염구 마관25",
     fields: [["base", "스펠 기본 피해"], ["gear", "마법서 마법 피해"], ["power", "주문력 보너스 %"],
              ["elem", "속성 보너스 %"], ["add", "추가 마법 피해"], ["pen", "마법 관통력 %"],
@@ -664,7 +719,7 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       return "최종 " + f1(r.finalDmg) + (v.dot > 0 ? " · 틱 " + f1(r.finalDmg / v.dot) : "");
     },
   });
-  makeSaves({
+  safeSaves({
     cls: "war", prefix: "w_", render: renderWar, example: "석궁 방관100",
     fields: [["base", "무기 기본 피해"], ["combo", "콤보 배수"], ["gear", "추가 무기 공격력"],
              ["power", "물리력 보너스 %"], ["add", "추가 물리 피해"], ["pen", "방어구 관통력 %"],
@@ -676,9 +731,6 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
       return "머리 " + Math.round(all[0].dmg) + " · 몸통 " + Math.round(all[1].dmg);
     },
   });
-
-  renderMage();
-  renderWar();
 })();
 </script>
 
