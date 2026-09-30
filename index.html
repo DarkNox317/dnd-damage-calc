@@ -106,6 +106,58 @@
   .note { margin-top: 1.2rem; font-size: .76rem; color: var(--muted); line-height: 1.6; }
   .note code { font-family: var(--mono); font-size: .95em; }
 
+  /* 저장 · 비교 */
+  .saves { margin-top: 1rem; }
+  .saverow { display: flex; gap: .5rem; margin-bottom: .6rem; }
+  .saverow input { flex: 1; min-width: 0; background: var(--ground); color: var(--ink);
+    border: 1px solid var(--edge); border-radius: 3px; padding: .4rem .6rem;
+    font-family: var(--sans); font-size: .88rem; }
+  .saverow input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn { background: var(--surface); border: 1px solid var(--edge); border-radius: 3px;
+    padding: .32rem .7rem; cursor: pointer; font-size: .78rem; color: var(--ink-2);
+    font-family: var(--sans); white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); color: var(--ink); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.1); color: #fff; }
+  .sv { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .6rem;
+    align-items: center; padding: .45rem 0; border-bottom: 1px solid var(--edge); }
+  .sv label { display: flex; align-items: center; gap: .5rem; min-width: 0; font-size: .88rem; cursor: pointer; }
+  .sv input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; flex: none; }
+  .sv .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sv .sum { font-family: var(--mono); font-size: .76rem; color: var(--muted); white-space: nowrap;
+    font-variant-numeric: tabular-nums; }
+  .sv .acts { display: flex; gap: .3rem; }
+  @media (max-width: 640px) {
+    .sv { grid-template-columns: minmax(0, 1fr) auto; }
+    .sv .acts { grid-column: 1 / -1; justify-content: flex-end; }
+  }
+  .savetools { display: flex; align-items: center; gap: .4rem; margin-top: .7rem; font-size: .8rem; color: var(--ink-2); }
+  .savetools label { display: flex; align-items: center; gap: .35rem; cursor: pointer; }
+  .savetools input { accent-color: var(--accent); }
+  .savetools .sp { flex: 1; }
+  .saves .empty, .saves .hint, .savenote { font-size: .78rem; color: var(--muted); margin: .4rem 0; }
+  .saves .hint b { color: var(--ink-2); }
+  .cmpwrap { overflow-x: auto; margin-top: .6rem; }
+  table.cmp { border-collapse: collapse; min-width: 100%; font-family: var(--mono);
+    font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .cmp th, .cmp td { padding: .36rem .6rem; border-bottom: 1px solid var(--edge);
+    text-align: right; white-space: nowrap; vertical-align: top; }
+  .cmp th:first-child, .cmp td:first-child { text-align: left; font-family: var(--sans);
+    color: var(--ink-2); position: sticky; left: 0; background: var(--surface); }
+  .cmp th { font-family: var(--sans); font-size: .78rem; color: var(--ink-2); cursor: pointer;
+    max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+  .cmp th:hover { color: var(--ink); }
+  .cmp th.base { color: var(--accent); }
+  .cmp th.cur { font-style: italic; }
+  .cmp td.diff { color: var(--ink); font-weight: 700;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .cmp tr.sep td { padding: 0; border-bottom: 2px solid var(--edge); }
+  .cmp tr.res td { font-size: .92rem; font-weight: 700; color: var(--ink); }
+  .cmp tr.res td:first-child { font-size: .82rem; }
+  .cmp tr.res small { font-size: .72rem; font-weight: 400; }
+  .cmp .up { color: var(--ok); } .cmp .down { color: var(--war); } .cmp .same { color: var(--muted); }
+
   #theme-toggle { position: fixed; top: 1rem; right: 1rem; z-index: 5;
     background: var(--surface); color: var(--ink-2); border: 1px solid var(--edge);
     border-radius: 3px; padding: .4rem .7rem; cursor: pointer;
@@ -176,6 +228,8 @@
   </div>
 </div>
 
+<div class="card saves" id="m_saves"></div>
+
 <p class="note">
   공식: <code>[ (기본 + 장비×계수) × (1 + 주문력%×계수) × (1 + 속성%) + 추가×계수 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%)</code><br>
   · 화상은 총량제: 총량을 지속 초로 나눠 1초마다 지급 (화염 통달 +2초는 같은 총량을 더 잘게 나눔)
@@ -216,6 +270,8 @@
     </div>
   </div>
 </div>
+
+<div class="card saves" id="w_saves"></div>
 
 <p class="note">
   공식: <code>[ (무기 기본 × 콤보 + 추가 무기 공격력) × (1 + 물리력%) + 추가 물리 피해 ] × 부위배수 × [1 − 감소%×(1−관통%)] × (1 − 투사체감소%) × 감쇠</code> (감소%가 음수면 관통 미적용)<br>
@@ -390,6 +446,235 @@ if (typeof module !== "undefined") module.exports = { calcMagic, calcPhysical, c
     const p = JSON.parse(btn.dataset.p);
     for (const k in p) if ($("w_" + k)) $("w_" + k).value = p[k];
     renderWar();
+  });
+
+  /* ── 세팅 저장 · 비교 (이 브라우저의 localStorage 에만 남음) ── */
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDelta = (d, base) => {
+    if (Math.abs(d) < 0.005) return "<span class='same'>±0</span>";
+    const pct = base ? " (" + (d > 0 ? "+" : "") + (Math.round(d / base * 1000) / 10) + "%)" : "";
+    return "<span class='" + (d > 0 ? "up" : "down") + "'>" + (d > 0 ? "+" : "") + f1(d) + pct + "</span>";
+  };
+
+  function makeSaves (cfg) {
+    const P = cfg.prefix, KEY = "ddc-saves-" + cfg.cls, box = $(P + "saves");
+    let saves = [], canStore = true, baseCol = 0, diffOnly = true, noteTimer = null;
+    const checked = new Set();
+    try {
+      const a = JSON.parse(localStorage.getItem(KEY) || "[]");
+      if (Array.isArray(a)) saves = a;
+    } catch (e) { canStore = false; }
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saves)); } catch (e) { canStore = false; } };
+
+    const isSel = (k) => !!(cfg.fields.find(f => f[0] === k) || [])[2];
+    const dflt = (k) => {
+      const el = $(P + k);
+      if (isSel(k)) return ([...el.options].find(o => o.defaultSelected) || el.options[0]).value;
+      const v = parseFloat(el.defaultValue); return isNaN(v) ? 0 : v;
+    };
+    const current = () => Object.fromEntries(cfg.fields.map(([k]) => [k, isSel(k) ? $(P + k).value : num(P + k)]));
+    const full = (v) => Object.fromEntries(cfg.fields.map(([k]) => [k, v && v[k] !== undefined ? v[k] : dflt(k)]));
+    const clean = (v) => {          // 가져온 값 검증: 숫자는 유한값만, 선택지는 실제 옵션만
+      const out = {};
+      for (const [k] of cfg.fields) {
+        if (!v || v[k] === undefined) continue;
+        if (isSel(k)) { if ([...$(P + k).options].some(o => o.value === v[k])) out[k] = v[k]; }
+        else { const n = parseFloat(v[k]); if (isFinite(n)) out[k] = n; }
+      }
+      return out;
+    };
+    const shown = (k, val) => {
+      if (!isSel(k)) return String(val);
+      const o = [...$(P + k).options].find(o => o.value === val);
+      return o ? o.textContent : String(val);
+    };
+    const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+    box.innerHTML =
+      "<h2>저장 · 비교</h2>" +
+      "<div class='saverow'><input id='" + P + "sname' maxlength='40' autocomplete='off' placeholder='이름 (예: " + cfg.example + ")'>" +
+      "<button class='btn primary' data-act='save' type='button'>현재 값 저장</button></div>" +
+      "<div id='" + P + "slist'></div>" +
+      "<div class='savetools'><label><input type='checkbox' id='" + P + "sdiff' checked> 다른 입력값만 보기</label>" +
+      "<span class='sp'></span>" +
+      "<button class='btn' data-act='export' type='button'>내보내기</button>" +
+      "<button class='btn' data-act='import' type='button'>가져오기</button></div>" +
+      "<div class='cmpwrap' id='" + P + "scmp'></div>" +
+      "<p class='savenote' id='" + P + "snote'></p>";
+
+    function note (msg) {
+      const el = $(P + "snote");
+      clearTimeout(noteTimer);
+      const base = canStore
+        ? "저장한 세팅은 이 브라우저에만 남아. 다른 기기로 옮기거나 백업할 땐 내보내기 → 가져오기."
+        : "이 브라우저가 저장소를 막고 있어서 새로고침하면 사라져. 내보내기로 따로 보관해둬.";
+      el.textContent = msg || base;
+      if (msg) noteTimer = setTimeout(() => { el.textContent = base; }, 4000);
+    }
+
+    function drawList () {
+      const L = $(P + "slist");
+      if (!saves.length) {
+        L.innerHTML = "<p class='empty'>아직 저장한 세팅이 없어. 값을 넣고 이름을 붙여 저장해봐.</p>";
+        return;
+      }
+      L.innerHTML = saves.map(s =>
+        "<div class='sv' data-id='" + esc(s.id) + "'>" +
+        "<label><input type='checkbox' data-act='chk'" + (checked.has(s.id) ? " checked" : "") + ">" +
+        "<span class='nm' title='" + esc(s.name) + "'>" + esc(s.name) + "</span></label>" +
+        "<span class='sum'>" + cfg.summary(full(s.vals)) + "</span>" +
+        "<span class='acts'>" +
+        "<button class='btn' data-act='load' type='button'>불러오기</button>" +
+        "<button class='btn' data-act='over' type='button' title='지금 입력된 값으로 이 세팅을 갱신'>덮어쓰기</button>" +
+        "<button class='btn' data-act='del' type='button'>삭제</button></span></div>").join("");
+    }
+
+    function drawCompare () {
+      const C = $(P + "scmp");
+      const cols = saves.filter(s => checked.has(s.id)).map(s => ({ name: s.name, v: full(s.vals) }));
+      if (!cols.length) {
+        C.innerHTML = saves.length
+          ? "<p class='hint'>체크한 세팅이 <b>현재 입력</b>과 나란히 비교돼. 열 제목을 누르면 그 열이 차이(±)의 기준이 돼.</p>"
+          : "";
+        return;
+      }
+      cols.push({ name: "현재 입력", v: current(), cur: true });
+      if (baseCol >= cols.length) baseCol = 0;
+
+      let h = "<table class='cmp'><thead><tr><th></th>" + cols.map((c, j) =>
+        "<th data-col='" + j + "' class='" + (j === baseCol ? "base" : "") + (c.cur ? " cur" : "") +
+        "' title='" + esc(c.name) + " — 눌러서 기준으로'>" + (j === baseCol ? "◆ " : "") + esc(c.name) + "</th>").join("") +
+        "</tr></thead><tbody>";
+
+      let shownRows = 0;
+      for (const [k, label] of cfg.fields) {
+        const vals = cols.map(c => c.v[k]);
+        const same = vals.every(x => x === vals[0]);
+        if (same && diffOnly) continue;
+        shownRows++;
+        h += "<tr><td>" + label + "</td>" + vals.map(x =>
+          "<td class='" + (x !== vals[baseCol] ? "diff" : "") + "'>" + esc(shown(k, x)) + "</td>").join("") + "</tr>";
+      }
+      if (!shownRows) h += "<tr><td colspan='" + (cols.length + 1) + "' style='color:var(--muted)'>입력값이 전부 같아</td></tr>";
+      h += "<tr class='sep'><td colspan='" + (cols.length + 1) + "'></td></tr>";
+
+      const res = cols.map(c => cfg.results(c.v));
+      const labels = [...new Set(res.flatMap(r => r.map(x => x[0])))];
+      for (const lb of labels) {
+        const vs = res.map(r => { const f = r.find(x => x[0] === lb); return f ? f[1] : null; });
+        const b = vs[baseCol];
+        h += "<tr class='res'><td>" + lb + "</td>" + vs.map((x, j) =>
+          "<td>" + (x === null ? "—" : f1(x) +
+            (j !== baseCol && b !== null ? "<br><small>" + fmtDelta(x - b, b) + "</small>" : "")) + "</td>").join("") + "</tr>";
+      }
+      C.innerHTML = h + "</tbody></table>";
+    }
+
+    function saveNow () {
+      const nameEl = $(P + "sname");
+      const name = nameEl.value.trim() || ("세팅 " + (saves.length + 1));
+      saves.push({ id: newId(), name, vals: current(), t: Date.now() });
+      nameEl.value = "";
+      persist(); drawList(); drawCompare(); note("'" + name + "' 저장했어.");
+    }
+
+    box.addEventListener("click", (ev) => {
+      const th = ev.target.closest("th[data-col]");
+      if (th) { baseCol = +th.dataset.col; drawCompare(); return; }
+      const b = ev.target.closest("button[data-act]");
+      if (!b) return;
+      const act = b.dataset.act, row = b.closest(".sv");
+      const s = row ? saves.find(x => x.id === row.dataset.id) : null;
+      if (act === "save") saveNow();
+      else if (act === "load" && s) {
+        const v = full(s.vals);
+        cfg.fields.forEach(([k]) => { $(P + k).value = v[k]; });
+        cfg.render(); drawCompare(); note("'" + s.name + "' 불러왔어.");
+      } else if (act === "over" && s) {
+        if (!confirm("'" + s.name + "'을(를) 지금 입력된 값으로 덮어쓸까?")) return;
+        s.vals = current(); s.t = Date.now();
+        persist(); drawList(); drawCompare(); note("'" + s.name + "' 갱신했어.");
+      } else if (act === "del" && s) {
+        if (!confirm("'" + s.name + "' 삭제할까?")) return;
+        saves = saves.filter(x => x !== s); checked.delete(s.id);
+        persist(); drawList(); drawCompare(); note("삭제했어.");
+      } else if (act === "export") {
+        if (!saves.length) { note("내보낼 세팅이 없어."); return; }
+        const data = JSON.stringify({ app: "ddc", cls: cfg.cls, saves });
+        const fallback = () => prompt("아래 내용을 전부 복사해서 보관해", data);
+        if (navigator.clipboard && navigator.clipboard.writeText)
+          navigator.clipboard.writeText(data).then(() => note(saves.length + "개 복사했어 — 메모장 같은 데 붙여넣어 보관해."), fallback);
+        else fallback();
+      } else if (act === "import") {
+        const txt = prompt("내보내기로 복사해둔 내용을 붙여넣어줘");
+        if (!txt) return;
+        let o;
+        try { o = JSON.parse(txt); } catch (e) { o = null; }
+        if (!o || o.app !== "ddc" || !Array.isArray(o.saves)) { alert("형식이 맞지 않아. 내보내기로 복사한 내용을 그대로 붙여넣어줘."); return; }
+        if (o.cls !== cfg.cls) { alert((o.cls === "war" ? "전사" : "법사") + " 탭 데이터야. 그 탭에서 가져와줘."); return; }
+        let n = 0;
+        for (const s of o.saves) {
+          if (!s || typeof s.name !== "string" || !s.vals) continue;
+          saves.push({ id: newId(), name: s.name.slice(0, 40) || ("세팅 " + (saves.length + 1)), vals: clean(s.vals), t: +s.t || Date.now() });
+          n++;
+        }
+        persist(); drawList(); drawCompare(); note(n + "개 가져왔어.");
+      }
+    });
+    box.addEventListener("change", (ev) => {
+      const t = ev.target;
+      if (t.dataset.act === "chk") {
+        const id = t.closest(".sv").dataset.id;
+        if (t.checked) checked.add(id); else checked.delete(id);
+        drawCompare();
+      } else if (t.id === P + "sdiff") { diffOnly = t.checked; drawCompare(); }
+    });
+    $(P + "sname").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); saveNow(); }
+    });
+    // 입력을 바꾸면 비교표의 '현재 입력' 열이 따라 갱신됨
+    const panel = $("panel-" + cfg.cls);
+    const live = (ev) => { if (!box.contains(ev.target)) drawCompare(); };
+    panel.addEventListener("input", live);
+    panel.addEventListener("change", live);
+    panel.addEventListener("click", (ev) => { if (ev.target.closest(".chip")) drawCompare(); });
+
+    drawList(); drawCompare(); note();
+  }
+
+  const mageIn = (v) => Object.assign({}, v, { coeff: v.coeff === 0 ? 1 : v.coeff });
+  const warIn = (v) => Object.assign({}, v, { combo: v.combo === 0 ? 1 : v.combo, falloff: v.falloff === 0 ? 1 : v.falloff });
+
+  makeSaves({
+    cls: "mage", prefix: "m_", render: renderMage, example: "화염구 마관25",
+    fields: [["base", "스펠 기본 피해"], ["gear", "마법서 마법 피해"], ["power", "주문력 보너스 %"],
+             ["elem", "속성 보너스 %"], ["add", "추가 마법 피해"], ["pen", "마법 관통력 %"],
+             ["hs", "헤드샷 보너스 %"], ["coeff", "계수"], ["loc", "적중 부위", true],
+             ["dr", "마법 피해 감소 %"], ["hsred", "헤드샷 피해 감소 %"], ["projred", "투사체 피해 감소 %"],
+             ["dot", "도트 지속(초)"]],
+    results: (v) => {
+      const r = calcMagic(mageIn(v));
+      const out = [["최종 데미지", r.finalDmg]];
+      if (v.dot > 0) out.push(["틱당 (도트)", r.finalDmg / v.dot]);
+      return out;
+    },
+    summary: (v) => {
+      const r = calcMagic(mageIn(v));
+      return "최종 " + f1(r.finalDmg) + (v.dot > 0 ? " · 틱 " + f1(r.finalDmg / v.dot) : "");
+    },
+  });
+  makeSaves({
+    cls: "war", prefix: "w_", render: renderWar, example: "석궁 방관100",
+    fields: [["base", "무기 기본 피해"], ["combo", "콤보 배수"], ["gear", "추가 무기 공격력"],
+             ["power", "물리력 보너스 %"], ["add", "추가 물리 피해"], ["pen", "방어구 관통력 %"],
+             ["hs", "헤드샷 보너스 %"], ["dr", "물리 피해 감소 %"], ["hsred", "헤드샷 피해 감소 %"],
+             ["projred", "투사체 피해 감소 %"], ["falloff", "투사체 감쇠"]],
+    results: (v) => calcPhysicalAll(warIn(v)).map(x => [x.name, x.dmg]),
+    summary: (v) => {
+      const all = calcPhysicalAll(warIn(v));
+      return "머리 " + Math.round(all[0].dmg) + " · 몸통 " + Math.round(all[1].dmg);
+    },
   });
 
   renderMage();
